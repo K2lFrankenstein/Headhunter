@@ -1,7 +1,7 @@
 import os,fitz
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
-from utils import driver,JOB_FOLDER,PROFILE_FOLDER
+from utils import driver_code,JOB_FOLDER,PROFILE_FOLDER,EXTRACT_TEXT_FROM_PDF
 
 description = """ 
                     🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊
@@ -13,8 +13,9 @@ description = """
 
                         | Endpoint                                       | Description                                                                                      |
                         |------------------------------------------------|--------------------------------------------------------------------------------------------------|
-                        | /upload_Job_Description/                                       | Upload the Job Description (ONLY PDF) to find suitable candidates.               |
-                        | /list_job_descriptions/                                        | list all the previously uploaded job description .                               |
+                        | /upload_Job_Description/                       | Upload the Job Description (ONLY PDF),Job Tittle and Location to find suitable candidates.       |
+                        | /list_job_descriptions/                        | Extract the uploaded Job Description Data.                                                       |
+                        | /list_profile_data/                            | Extract the extracted Candidate Profiles Data.                                                   |
                         
 
                     🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊---🧊
@@ -24,12 +25,9 @@ description = """
 Find the Source code at: `https://github.com/K2lFrankenstein/Headhunter/` 
 """
 
-
-
 app = FastAPI(title=" Headhumter automation API",
     description=description,
     version="1.0.4",openapi_url="/base_schema",docs_url="/")
-
 
 @app.post("/upload_Job_Description/")
 async def upload_job_description(
@@ -52,11 +50,12 @@ async def upload_job_description(
             content = await file.read()
             buffer.write(content)
 
-        jd_content = driver(file_path,job_role,location)   
+        extr_data,jd_content = driver_code(file_path,job_role,location)   
         
         return {
             "message": f"File {file.filename} uploaded successfully",
-            "Extracted_Data": jd_content,
+            "Profile_Scores": extr_data,
+            "jd_content": jd_content,
             "Job_Role": job_role,
             "Location": location
         }
@@ -67,8 +66,28 @@ async def upload_job_description(
 async def list_job_descriptions():
     try:
         files = [f for f in os.listdir(JOB_FOLDER) if f.endswith('.pdf')]
-        return JSONResponse(status_code=200, content={"job_descriptions": files})
+
+        extracted_texts = {}
+        for file in files:
+            file_path = os.path.join(JOB_FOLDER, file)
+            extracted_texts[file] = EXTRACT_TEXT_FROM_PDF(file_path)
+
+        return JSONResponse(status_code=200, content={"job_descriptions": extracted_texts})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"An error occurred: {str(e)}"})
 
-    
+@app.get("/list_profile_data/")
+async def list_profile_data():
+    try:
+        # List all PDF files in PROFILE_FOLDER
+        files = [f for f in os.listdir(PROFILE_FOLDER) if f.endswith('.pdf')]
+
+        # Extract text from each PDF
+        extracted_texts = {}
+        for file in files:
+            file_path = os.path.join(PROFILE_FOLDER, file)
+            extracted_texts[file] = EXTRACT_TEXT_FROM_PDF(file_path)
+
+        return JSONResponse(status_code=200, content={"extracted_texts": extracted_texts})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"An error occurred: {str(e)}"})   
